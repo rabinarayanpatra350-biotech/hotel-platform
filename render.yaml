@@ -1,0 +1,39 @@
+# Render blueprint — deploys the API and a managed Postgres together.
+# Import this repository in Render and it will create both services.
+services:
+  - type: web
+    name: hotel-platform-api
+    runtime: node
+    rootDir: server
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run migrate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hotel-platform-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: 'true'
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: CORS_ORIGINS
+        sync: false        # set to the deployed Vercel URL
+      - key: UPLOAD_PUBLIC_BASE_URL
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+
+databases:
+  - name: hotel-platform-db
+    databaseName: hotel
+    plan: free
+    region: singapore
