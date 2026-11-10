@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mumbai Boutique Hotels — book direct</title>
+<meta name="description" content="Fourteen boutique properties across Mumbai. Book direct for the best rate." />
+<style>
+:root{--ink:#17202a;--soft:#4a5a68;--muted:#6b7a88;--line:#e2e8ee;--bg:#f6f8fa;--surface:#fff;
+--brand:#14532d;--brand2:#166534;--accent:#b45309;--danger:#b91c1c;--ok:#15803d;--r:10px;
+--sh:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);--shl:0 4px 6px -1px rgba(16,24,40,.08)}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+color:var(--ink);background:var(--bg);line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3{line-height:1.25;margin:0 0 .5rem}h1{font-size:1.9rem;letter-spacing:-.02em}h2{font-size:1.25rem}h3{font-size:1.05rem}
+p{margin:0 0 .75rem}a{color:var(--brand2);text-decoration:none}a:hover{text-decoration:underline}
+code{font-family:ui-monospace,Menlo,monospace;background:#eef2f6;padding:.1em .35em;border-radius:4px;font-size:.9em}
+.container{max-width:1120px;margin:0 auto;padding:1.5rem 1.25rem}
+.nav{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.nav-inner{max-width:1120px;margin:0 auto;padding:.75rem 1.25rem;display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:700;color:var(--ink)}
+.brand:hover{text-decoration:none}
+.mark{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:var(--brand);color:#fff;font-size:.85rem}
+.nav-links{display:flex;gap:1.1rem;flex:1;flex-wrap:wrap}
+.nav-links a{color:var(--soft);font-size:.93rem}
+.nav-links a.on{color:var(--brand);font-weight:600;box-shadow:inset 0 -2px 0 var(--brand)}
+.hero{background:linear-gradient(160deg,#0f3d24,#14532d 55%,#1c6b3c);color:#fff;padding:3rem 0 2.5rem}
+.hero h1{color:#fff;max-width:22ch}.hero p{color:#c9e6d5;margin-bottom:1.5rem}
+.bar{display:flex;gap:.6rem;flex-wrap:wrap}
+.bar input,.bar select{padding:.7rem .9rem;border-radius:8px;border:0;font:inherit;font-size:.95rem;
+background:#fff;color:var(--ink);min-width:200px;box-shadow:var(--shl)}
+.bar input{flex:1;min-width:240px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:1.25rem;box-shadow:var(--sh);margin-bottom:1.25rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1rem}
+.pcard{display:block;color:inherit;transition:box-shadow .14s,transform .14s}
+.pcard:hover{text-decoration:none;box-shadow:var(--shl);transform:translateY(-2px)}
+.ptop{display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem}
+.badge{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.04em;background:#e8f0ea;color:var(--brand);padding:.15rem .5rem;border-radius:999px}
+.stars{color:var(--accent);letter-spacing:.05em}
+.pfoot{display:flex;justify-content:space-between;font-size:.85rem;color:var(--soft);border-top:1px solid var(--line);padding-top:.6rem;margin-top:.6rem}
+.muted{color:var(--muted)}.small{font-size:.85rem}
+.shead{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+label{display:block;font-size:.86rem;font-weight:600;color:var(--soft)}
+input,select,textarea{display:block;width:100%;margin-top:.3rem;padding:.55rem .7rem;border:1px solid var(--line);
+border-radius:8px;font:inherit;font-size:.93rem;color:var(--ink);background:#fff}
+input:focus,select:focus,textarea:focus{outline:2px solid #86c39c;outline-offset:1px;border-color:var(--brand)}
+.stack{display:flex;flex-direction:column;gap:.85rem}
+.row{display:flex;gap:.85rem;align-items:flex-end;flex-wrap:wrap}.row label{flex:1;min-width:140px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.55rem 1rem;border-radius:8px;
+border:1px solid transparent;font:inherit;font-size:.92rem;font-weight:600;cursor:pointer;background:#eef2f6;color:var(--ink)}
+.btn:hover{background:#e4eaf0}.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-p{background:var(--brand);color:#fff}.btn-p:hover{background:var(--brand2)}
+.btn-s{padding:.3rem .65rem;font-size:.82rem;border-radius:6px}
+.alert{padding:.7rem .9rem;border-radius:8px;font-size:.9rem;margin:.75rem 0}
+.err{background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
+.ok{background:#f0fdf4;color:var(--ok);border:1px solid #bbf7d0}
+.table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:.75rem}
+.table th,.table td{text-align:left;padding:.6rem .7rem;border-bottom:1px solid var(--line)}
+.table th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
+.table tbody tr:hover{background:#f8fafc}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.25rem}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:1.1rem 1.2rem;box-shadow:var(--sh);display:flex;flex-direction:column;gap:.15rem}
+.kpi-l{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+.kpi-v{font-size:1.75rem;font-weight:700;letter-spacing:-.02em;color:var(--brand)}
+.kpi-s{font-size:.82rem;color:var(--muted)}
+.two{display:grid;grid-template-columns:1.6fr 1fr;gap:1.25rem;align-items:start}
+@media(max-width:860px){.two{grid-template-columns:1fr}}
+.reviews{list-style:none;padding:0;margin:0;display:grid;gap:1rem}
+.reviews li{border-left:3px solid var(--line);padding-left:.9rem}
+.foot{border-top:1px solid var(--line);background:var(--surface);margin-top:2rem}
+.foot-in{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:1.25rem;font-size:.85rem;color:var(--soft)}
+.foot p{margin:0}
+.pill{display:inline-block;font-size:.75rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;background:#dcfce7;color:#166534}
+.demo{background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:.82rem;padding:.6rem .9rem;border-radius:8px;margin:1rem 0}
+@media(max-width:640px){h1{font-size:1.55rem}.bar input{min-width:0}}
+</style>
+</head>
+<body>
+<header class="nav"><div class="nav-inner">
+  <a class="brand" href="#/"><span class="mark">MB</span><span>Mumbai Boutique Hotels</span></a>
+  <nav class="nav-links">
+    <a href="#/" data-nav="home">Stay</a>
+    <a href="#/dashboard" data-nav="dashboard">Staff dashboard</a>
+  </nav>
+</div></header>
+<main id="app"><div class="container"><p class="muted">Loading…</p></div></main>
+<footer class="foot"><div class="foot-in">
+  <p>Mumbai Boutique Hotels — fourteen properties across the city.</p>
+  <p class="muted">A portfolio project. No real bookings are taken.</p>
+</div></footer>
+
+<script>
+/* ---------------------------------------------------------------------------
+   Static build of the hotel platform, for GitHub Pages.
+
+   The full application runs a Node/Express API (see /server). GitHub Pages is
+   static, so this build talks to the same PostgreSQL database through Supabase's
+   auto-generated REST API instead. Everything below reads only from views and
+   tables that row-level security explicitly exposes, and the tables holding
+   users, sessions, jobs and email logs are closed to anonymous access entirely.
+   --------------------------------------------------------------------------- */
+const SUPABASE = 'https://pfyekomrgfxeixdhkjus.supabase.co';
+const KEY = 'sb_publishable_eHOSvoUhqkGqimtZnCrg8g_m68BcNUE';
+const HDR = { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
+const WINDOW_NIGHTS = 365;   // metrics are stated over a 365-night window
+
+const api = async (path, opts = {}) => {
+  const res = await fetch(SUPABASE + '/rest/v1/' + path, { ...opts, headers: { ...HDR, ...(opts.headers || {}) } });
+  const text = await res.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+  if (!res.ok) throw new Error((body && body.message) || body || ('Request failed ' + res.status));
+  return body;
+};
+
+const inr = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(n) || 0);
+const pct = n => (Number(n) * 100).toFixed(1) + '%';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const el = (id) => document.getElementById(id);
+const app = () => el('app');
+const nights = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+const plus = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+
+const state = { q: '', minStar: '' };
+
+/* ------------------------------------------------------------------ home */
+async function home() {
+  app().innerHTML = `
+  <section class="hero"><div class="container">
+    <h1>Fourteen boutique properties. One city that never sits still.</h1>
+    <p>Book direct for the best rate — no commission, no middleman.</p>
+    <div class="bar">
+      <input id="q" type="search" placeholder="Search by name or area — try Juhu, Worli, Bandra…" value="${esc(state.q)}" />
+      <select id="star">
+        <option value="">Any rating</option>
+        <option value="5">5 star</option><option value="4">4 star and up</option><option value="3">3 star and up</option>
+      </select>
+    </div>
+  </div></section>
+  <div class="container">
+    <div class="shead"><h2>Our properties</h2><span class="muted" id="count"></span></div>
+    <div class="grid" id="grid"><p class="muted">Loading properties…</p></div>
+  </div>`;
+
+  el('q').addEventListener('input', e => { state.q = e.target.value; paintGrid(); });
+  el('star').addEventListener('change', e => { state.minStar = e.target.value; paintGrid(); });
+  await paintGrid();
+}
+
+let ALL = [];
+async function paintGrid() {
+  const grid = el('grid'); if (!grid) return;
+  if (!ALL.length) ALL = await api('properties?select=*&order=name.asc');
+  const q = state.q.trim().toLowerCase();
+  const rows = ALL.filter(p =>
+    (!q || (p.name + ' ' + p.code + ' ' + (p.description || '')).toLowerCase().includes(q)) &&
+    (!state.minStar || p.star_rating >= Number(state.minStar)));
+  el('count').textContent = rows.length + ' shown';
+  grid.innerHTML = rows.length ? rows.map(p => `
+    <a class="card pcard" href="#/p/${p.id}">
+      <div class="ptop"><span class="badge">${esc(p.code)}</span>
+        <span class="stars">${'★'.repeat(p.star_rating || 0)}</span></div>
+      <h3>${esc(p.name)}</h3>
+      <p class="muted">${esc(p.city)}</p>
+      <div class="pfoot"><span>${p.total_rooms} rooms</span><span>${esc(p.locality || 'Mumbai')}</span></div>
+    </a>`).join('') : '<p class="muted">No properties match that search.</p>';
+}
+
+/* ------------------------------------------------------------ property */
+async function property(id) {
+  app().innerHTML = '<div class="container"><p class="muted">Loading…</p></div>';
+  const [p] = await api(`properties?select=*&id=eq.${id}`);
+  if (!p) { app().innerHTML = '<div class="container"><div class="alert err">Property not found.</div></div>'; return; }
+  const [types, avail, reviews, metrics] = await Promise.all([
+    api('room_types?select=*&order=base_rate_inr.asc'),
+    api(`room_availability?property_id=eq.${id}`),
+    api(`reviews?property_id=eq.${id}&select=*&order=created_at.desc&limit=6`),
+    api(`property_metrics?id=eq.${id}&select=*`),
+  ]);
+  const availMap = Object.fromEntries(avail.map(a => [a.room_type_id, a.total_rooms]));
+  const m = metrics[0] || {};
+  const avg = reviews.length ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : null;
+
+  app().innerHTML = `
+  <div class="container">
+    <span class="badge">${esc(p.code)}</span>
+    <h1>${esc(p.name)}</h1>
+    <p class="muted">${esc(p.city)}${p.locality ? ' · ' + esc(p.locality) : ''} · ${p.star_rating}★ · ${p.total_rooms} rooms${avg ? ' · ★ ' + avg + ' from ' + reviews.length + ' reviews' : ''}</p>
+    ${p.description ? `<p>${esc(p.description)}</p>` : ''}
+    <div class="two">
+      <section class="card">
+        <h2>Rooms</h2>
+        <table class="table">
+          <thead><tr><th>Room type</th><th>Sleeps</th><th class="num">Per night</th><th class="num">Rooms</th></tr></thead>
+          <tbody>${types.map(t => {
+            const n = availMap[t.id];
+            return `<tr><td><strong>${esc(t.name)}</strong><div class="muted small">${esc(t.bed_type || '')}</div></td>
+              <td>${t.max_occupancy}</td><td class="num">${inr(t.base_rate_inr)}</td>
+              <td class="num">${n ? n : '<span class="muted">—</span>'}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+        <div class="demo">This is the static build served by GitHub Pages. It reads the same live database as the full
+        application, but booking goes through Supabase's REST API rather than the Express server — so there is no
+        sign-in here. The full API, with JWT sessions and staff roles, is in <code>/server</code>.</div>
+        <h3>Book a stay</h3>
+        <form class="stack" id="book">
+          <div class="row">
+            <label>Check in<input type="date" id="ci" value="${plus(7)}" min="${plus(0)}" required></label>
+            <label>Check out<input type="date" id="co" value="${plus(10)}" min="${plus(1)}" required></label>
+          </div>
+          <label>Room type<select id="rt">${types.map(t => `<option value="${t.id}" data-rate="${t.base_rate_inr}">${esc(t.name)} — ${inr(t.base_rate_inr)}/night</option>`).join('')}</select></label>
+          <div class="row">
+            <label>Full name<input id="gn" required minlength="2" placeholder="Asha Rao"></label>
+            <label>Email<input id="ge" type="email" required placeholder="asha@example.com"></label>
+          </div>
+          <button class="btn btn-p" id="bgo">Confirm booking</button>
+          <div id="bout"></div>
+        </form>
+      </section>
+      <aside class="card">
+        <h2>Send an enquiry</h2>
+        <form class="stack" id="enq">
+          <label>Your name<input id="en" required minlength="2"></label>
+          <label>Email<input id="ee" type="email" required></label>
+          <label>Message<textarea id="em" rows="4" required minlength="10" placeholder="Do you have parking?"></textarea></label>
+          <button class="btn btn-p">Send enquiry</button>
+          <div id="eout"></div>
+        </form>
+      </aside>
+    </div>
+    ${reviews.length ? `<section class="card"><h2>What guests say</h2><ul class="reviews">${reviews.map(r => `
+      <li><div><span class="stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+      ${r.title ? ' <strong>' + esc(r.title) + '</strong>' : ''}</div>
+      <p>${esc(r.body)}</p><p class="muted small">— A guest</p></li>`).join('')}</ul></section>` : ''}
+  </div>`;
+
+  el('rt').addEventListener('change', () => {});
+  el('book').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const out = el('bout'); out.innerHTML = '';
+    const ci = el('ci').value, co = el('co').value;
+    const n = nights(ci, co);
+    if (n < 1) { out.innerHTML = '<div class="alert err">Check-out must be after check-in.</div>'; return; }
+    const sel = el('rt').selectedOptions[0];
+    const rate = Number(sel.dataset.rate) * n;
+    const btn = el('bgo'); btn.disabled = true; btn.textContent = 'Booking…';
+    try {
+      const [guest] = await api('guests', { method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ full_name: el('gn').value, email: el('ge').value }) });
+      const ref = 'WEB-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+      await api('bookings', { method: 'POST', body: JSON.stringify({
+        reference: ref, property_id: p.id, guest_id: guest.id, check_in: ci, check_out: co,
+        rooms_booked: 1, adults: 2, children: 0, rate_inr: rate,
+        amount_original: rate, currency_original: 'INR', fx_rate: 1, source: 'website', status: 'confirmed' }) });
+      out.innerHTML = `<div class="alert ok"><strong>Booked.</strong> Reference <code>${esc(ref)}</code> — ${n} night${n === 1 ? '' : 's'}, ${inr(rate)}.</div>`;
+      el('book').reset();
+    } catch (err) {
+      out.innerHTML = `<div class="alert err">${esc(err.message)}</div>`;
+    } finally { btn.disabled = false; btn.textContent = 'Confirm booking'; }
+  });
+
+  el('enq').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const out = el('eout'); out.innerHTML = '';
+    try {
+      await api('enquiries', { method: 'POST', body: JSON.stringify({
+        property_id: p.id, name: el('en').value, email: el('ee').value, message: el('em').value }) });
+      out.innerHTML = '<div class="alert ok">Thank you — the property will be in touch.</div>';
+      el('enq').reset();
+    } catch (err) { out.innerHTML = `<div class="alert err">${esc(err.message)}</div>`; }
+  });
+}
+
+/* ----------------------------------------------------------- dashboard */
+async function dashboard() {
+  app().innerHTML = '<div class="container"><p class="muted">Calculating…</p></div>';
+  const rows = await api('property_metrics?select=*&order=revenue_inr.desc');
+  const calc = r => {
+    const avail = r.total_rooms * WINDOW_NIGHTS;
+    const occ = avail ? r.room_nights_sold / avail : 0;
+    const adr = r.room_nights_sold ? Number(r.revenue_inr) / r.room_nights_sold : 0;
+    const revpar = avail ? Number(r.revenue_inr) / avail : 0;
+    return { ...r, avail, occ, adr, revpar };
+  };
+  const R = rows.map(calc);
+  const T = R.reduce((a, r) => ({ avail: a.avail + r.avail, sold: a.sold + r.room_nights_sold, rev: a.rev + Number(r.revenue_inr) }),
+    { avail: 0, sold: 0, rev: 0 });
+  const tOcc = T.avail ? T.sold / T.avail : 0, tAdr = T.sold ? T.rev / T.sold : 0, tRevpar = T.avail ? T.rev / T.avail : 0;
+
+  app().innerHTML = `
+  <div class="container">
+    <div class="shead"><h1>Portfolio dashboard</h1><span class="muted">${WINDOW_NIGHTS}-night window · live data</span></div>
+    <div class="demo">Read-only view. The full application computes these figures server-side in one place, with a
+    date-range picker, so the dashboard, the API tests and the written report cannot disagree.</div>
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-l">Occupancy</span><span class="kpi-v">${pct(tOcc)}</span>
+        <span class="kpi-s">${T.sold.toLocaleString('en-IN')} of ${T.avail.toLocaleString('en-IN')} room-nights</span></div>
+      <div class="kpi"><span class="kpi-l">ADR</span><span class="kpi-v">${inr(tAdr)}</span><span class="kpi-s">average daily rate</span></div>
+      <div class="kpi"><span class="kpi-l">RevPAR</span><span class="kpi-v">${inr(tRevpar)}</span><span class="kpi-s">revenue per available room</span></div>
+      <div class="kpi"><span class="kpi-l">Room revenue</span><span class="kpi-v">${inr(T.rev)}</span><span class="kpi-s">${rows.reduce((s, r) => s + r.bookings, 0)} bookings</span></div>
+    </div>
+    <section class="card"><h2>By property</h2>
+      <table class="table"><thead><tr><th>Property</th><th class="num">Rooms</th><th class="num">Sold</th>
+        <th class="num">Occupancy</th><th class="num">ADR</th><th class="num">RevPAR</th><th class="num">Revenue</th></tr></thead>
+      <tbody>${R.map(r => `<tr><td>${esc(r.name)} <span class="muted small">${esc(r.code)}</span></td>
+        <td class="num">${r.total_rooms}</td><td class="num">${r.room_nights_sold}</td>
+        <td class="num">${pct(r.occ)}</td><td class="num">${inr(r.adr)}</td>
+        <td class="num">${inr(r.revpar)}</td><td class="num">${inr(r.revenue_inr)}</td></tr>`).join('')}</tbody></table>
+    </section>
+  </div>`;
+}
+
+/* -------------------------------------------------------------- router */
+function mark(name) {
+  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === name));
+}
+
+async function route() {
+  const h = location.hash.replace(/^#\/?/, '');
+  try {
+    if (h.startsWith('p/')) { mark('home'); await property(h.slice(2)); }
+    else if (h === 'dashboard') { mark('dashboard'); await dashboard(); }
+    else { mark('home'); await home(); }
+  } catch (e) {
+    app().innerHTML = `<div class="container"><div class="alert err">Could not load: ${esc(e.message)}</div></div>`;
+  }
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>
