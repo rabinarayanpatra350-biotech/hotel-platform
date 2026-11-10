@@ -1,0 +1,16 @@
+import { startDevDb } from './devDb.js';
+const db = await startDevDb();
+const url = db.url;
+process.env.DATABASE_URL = url;
+process.env.NODE_ENV = 'development';
+const { migrate } = await import('../src/db/migrate.js');
+await migrate();
+const { runEtl, formatReport } = await import('../src/etl/run.js');
+const r = await runEtl();
+console.log(formatReport(r));
+const { pool } = await import('../src/db/pool.js');
+const m = await pool.query('SELECT count(*)::int c FROM bookings');
+console.log('bookings in db:', m.rows[0].c);
+await pool.end();
+db.stop();
+process.exit(0);
