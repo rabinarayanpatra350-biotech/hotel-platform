@@ -1,0 +1,684 @@
+openapi: 3.1.0
+info:
+  title: Mumbai Boutique Hotels API
+  version: 1.0.0
+  description: |
+    Booking and enquiry API for a group of 14 boutique properties in Mumbai.
+
+    **Conventions**
+
+    - Every success response is `{ "data": … }`; list endpoints add `{ "meta": … }`.
+    - Every error response is `{ "error": { "code", "message", "details"? } }`.
+    - Authentication is a 15-minute JWT access token in `Authorization: Bearer <token>`,
+      refreshed with a 30-day rotating refresh token.
+    - All monetary values the API returns or aggregates are in INR.
+
+    **Roles** — `guest` < `staff` < `admin`. Public sign-up always creates a guest.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://hotel-platform-api.onrender.com
+    description: Production (Render)
+
+tags:
+  - name: Auth
+  - name: Properties
+  - name: Room types
+  - name: Rooms
+  - name: Bookings
+  - name: Reviews
+  - name: Enquiries
+  - name: Metrics
+  - name: Media
+  - name: Users
+  - name: System
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [BAD_REQUEST, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, VALIDATION_FAILED, RATE_LIMITED, INTERNAL_ERROR]
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+            requestId: { type: string }
+
+    Meta:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        pages: { type: integer }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { type: string, enum: [guest, staff, admin] }
+        isActive: { type: boolean }
+
+    Tokens:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+
+    Property:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: MUM-JUH }
+        name: { type: string, example: Juhu Sands }
+        city: { type: string, example: Mumbai }
+        address: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        starRating: { type: integer, minimum: 1, maximum: 5 }
+        totalRooms: { type: integer }
+        isActive: { type: boolean }
+        avgRating: { type: number, nullable: true }
+        reviewCount: { type: integer }
+
+    RoomType:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: deluxe }
+        name: { type: string, example: Deluxe Room }
+        maxOccupancy: { type: integer }
+        bedType: { type: string, nullable: true }
+        baseRateInr: { type: number }
+        rooms: { type: integer }
+
+    Availability:
+      type: object
+      properties:
+        roomTypeId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        maxOccupancy: { type: integer }
+        baseRateInr: { type: number }
+        totalRooms: { type: integer }
+        roomsFree: { type: integer }
+        isAvailable: { type: boolean }
+
+    Booking:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, example: MUM-MWAYSPMZ-9WFY }
+        propertyId: { type: string, format: uuid }
+        propertyName: { type: string }
+        guestId: { type: string, format: uuid }
+        guestName: { type: string }
+        checkIn: { type: string, format: date }
+        checkOut: { type: string, format: date }
+        nights: { type: integer }
+        roomsBooked: { type: integer }
+        rateInr: { type: number, description: Total for the booking, in INR }
+        amountOriginal: { type: number, nullable: true }
+        currencyOriginal: { type: string, nullable: true, example: USD }
+        fxRate: { type: number, nullable: true, description: The exact rate used for conversion }
+        status: { type: string, enum: [pending, confirmed, checked_in, checked_out, cancelled] }
+
+    Metrics:
+      type: object
+      properties:
+        window:
+          type: object
+          properties:
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+            nights: { type: integer }
+        portfolio:
+          $ref: '#/components/schemas/MetricRow'
+        properties:
+          type: array
+          items: { $ref: '#/components/schemas/MetricRow' }
+        months:
+          type: array
+          items:
+            type: object
+            properties:
+              month: { type: string, example: '2026-01' }
+              roomNightsSold: { type: integer }
+              revenueInr: { type: number }
+
+    MetricRow:
+      type: object
+      properties:
+        propertyId: { type: string, format: uuid }
+        propertyCode: { type: string }
+        propertyName: { type: string }
+        roomsAvailable: { type: integer }
+        roomNightsAvailable: { type: integer }
+        roomNightsSold: { type: integer }
+        revenueInr: { type: number }
+        occupancyRate: { type: number, description: room-nights sold / available, 0–1 }
+        adrInr: { type: number, description: revenue / room-nights sold }
+        revparInr: { type: number, description: revenue / room-nights available }
+
+paths:
+  /api/health:
+    get:
+      tags: [System]
+      summary: Liveness and database check
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: ok }
+                      database: { type: string, example: up }
+                      uptimeSeconds: { type: integer }
+
+  /api/auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create a guest account
+      description: Always creates a `guest`. Staff and admin accounts are created by an admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email: { type: string, format: email }
+                password:
+                  type: string
+                  minLength: 10
+                  description: At least 10 characters, containing a letter and a number
+                fullName: { type: string, minLength: 2 }
+      responses:
+        '201': { description: Created }
+        '409': { description: Email already registered, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Validation failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in and receive tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Tokens' }
+        '401': { description: Wrong credentials, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { description: Too many attempts }
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate the refresh token
+      description: |
+        Burns the presented token and issues a new one in the same family. Presenting an already-burned
+        token revokes the whole family and returns 401 — the standard defence against a stolen token
+        being used alongside the legitimate one.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string, description: Omit to use the httpOnly cookie }
+      responses:
+        '200':
+          description: Rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Tokens' }
+        '401': { description: Invalid, expired, or reused token }
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the presented refresh token
+      responses:
+        '200': { description: Revoked }
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: The current user
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Current user }
+        '401': { description: Not authenticated }
+
+  /api/properties:
+    get:
+      tags: [Properties]
+      summary: List and search properties
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: q, in: query, schema: { type: string }, description: Matches name, code or description }
+        - { name: city, in: query, schema: { type: string } }
+        - { name: minStar, in: query, schema: { type: integer, minimum: 1, maximum: 5 } }
+        - { name: isActive, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: sort, in: query, schema: { type: string, enum: [name, created_at, star_rating, total_rooms] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        '200':
+          description: A page of properties
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Property' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '422': { description: Invalid query, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    post:
+      tags: [Properties]
+      summary: Create a property (staff)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code: { type: string, pattern: '^[A-Z0-9-]+$', example: MUM-NEW }
+                name: { type: string, minLength: 3 }
+                city: { type: string }
+                address: { type: string }
+                description: { type: string }
+                starRating: { type: integer, minimum: 1, maximum: 5 }
+      responses:
+        '201': { description: Created }
+        '403': { description: Requires staff }
+
+  /api/properties/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Properties]
+      summary: One property with its room types
+      responses:
+        '200': { description: Property }
+        '404': { description: Not found }
+    patch:
+      tags: [Properties]
+      summary: Update a property (staff)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Properties]
+      summary: Delete a property (admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Deleted }
+        '403': { description: Requires admin }
+
+  /api/room-types:
+    get:
+      tags: [Room types]
+      summary: The canonical room taxonomy
+      description: Five categories, onto which every property's own naming is mapped by the ETL.
+      responses:
+        '200':
+          description: Room types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/RoomType' }
+
+  /api/rooms/availability:
+    get:
+      tags: [Rooms]
+      summary: Free rooms per room type for a date range
+      parameters:
+        - { name: propertyId, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: checkIn, in: query, required: true, schema: { type: string, format: date } }
+        - { name: checkOut, in: query, required: true, schema: { type: string, format: date } }
+        - { name: roomTypeId, in: query, schema: { type: string, format: uuid } }
+        - { name: adults, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Availability per room type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Availability' }
+
+  /api/bookings:
+    get:
+      tags: [Bookings]
+      summary: List bookings
+      description: A guest sees only their own bookings; staff see all.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: propertyId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string, enum: [pending, confirmed, checked_in, checked_out, cancelled] } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: A page of bookings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Booking' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+    post:
+      tags: [Bookings]
+      summary: Create a booking
+      description: |
+        Open to anonymous guests — the website takes bookings without an account. If `roomId` is supplied the
+        request is checked against inventory and returns **409** if any night is sold out. The rate is taken
+        from the room type when `rateInr` is omitted, so a booking is never silently priced at zero.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId, checkIn, checkOut]
+              properties:
+                propertyId: { type: string, format: uuid }
+                roomId: { type: string, format: uuid }
+                guestId: { type: string, format: uuid }
+                guest:
+                  type: object
+                  properties:
+                    fullName: { type: string }
+                    email: { type: string, format: email }
+                    phone: { type: string }
+                checkIn: { type: string, format: date }
+                checkOut: { type: string, format: date }
+                roomsBooked: { type: integer, minimum: 1 }
+                adults: { type: integer, minimum: 1 }
+                children: { type: integer, minimum: 0 }
+                rateInr: { type: number }
+                source: { type: string, enum: [direct, website, ota, phone, walk_in] }
+      responses:
+        '201':
+          description: Booked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Booking' }
+        '409': { description: Those dates are sold out }
+        '422': { description: 'Validation failed (e.g. check-out not after check-in)' }
+
+  /api/bookings/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Bookings]
+      summary: One booking
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Booking }
+        '403': { description: Not your booking }
+    patch:
+      tags: [Bookings]
+      summary: Update a booking (staff)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Bookings]
+      summary: Delete a booking (admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Deleted }
+
+  /api/reviews:
+    get:
+      tags: [Reviews]
+      summary: List reviews
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - { name: propertyId, in: query, schema: { type: string, format: uuid } }
+        - { name: minRating, in: query, schema: { type: integer, minimum: 1, maximum: 5 } }
+      responses:
+        '200': { description: Reviews }
+    post:
+      tags: [Reviews]
+      summary: Leave a review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [propertyId, rating, body]
+              properties:
+                propertyId: { type: string, format: uuid }
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                title: { type: string }
+                body: { type: string, minLength: 10 }
+      responses:
+        '201': { description: Created }
+
+  /api/enquiries:
+    post:
+      tags: [Enquiries]
+      summary: Send an enquiry (public)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, message]
+              properties:
+                propertyId: { type: string, format: uuid }
+                name: { type: string, minLength: 2 }
+                email: { type: string, format: email }
+                phone: { type: string }
+                message: { type: string, minLength: 10 }
+      responses:
+        '201': { description: Received }
+    get:
+      tags: [Enquiries]
+      summary: The enquiries inbox (staff)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - { name: status, in: query, schema: { type: string, enum: [new, contacted, closed] } }
+      responses:
+        '200': { description: Enquiries }
+
+  /api/enquiries/{id}:
+    patch:
+      tags: [Enquiries]
+      summary: Change an enquiry's status (staff)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [new, contacted, closed] }
+      responses:
+        '200': { description: Updated }
+
+  /api/metrics:
+    get:
+      tags: [Metrics]
+      summary: Occupancy, ADR and RevPAR
+      description: |
+        Room-nights sold counts each night of each stay inside the window. Room-nights available is active
+        rooms × nights. Cancelled bookings are excluded. A stay straddling the window contributes only the
+        nights inside it, with its rate apportioned per night.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: propertyId, in: query, schema: { type: string, format: uuid } }
+        - { name: groupBy, in: query, schema: { type: string, enum: [property, month, none], default: property } }
+      responses:
+        '200':
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Metrics' }
+        '403': { description: Requires staff }
+
+  /api/metrics/occupancy-series:
+    get:
+      tags: [Metrics]
+      summary: Per-night occupancy for one property
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: propertyId, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200': { description: One point per night }
+
+  /api/media:
+    post:
+      tags: [Media]
+      summary: Upload an image (staff)
+      description: JPEG, PNG or WebP up to 5 MB. The stored filename is generated, never taken from the client.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: entityType, in: query, required: true, schema: { type: string, enum: [property, room_type, room] } }
+        - { name: entityId, in: query, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Uploaded }
+        '400': { description: Unsupported type or missing file }
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users (admin)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Users }
+        '403': { description: Requires admin }
+    post:
+      tags: [Users]
+      summary: Create a staff or admin account (admin)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 10 }
+                fullName: { type: string }
+                role: { type: string, enum: [guest, staff, admin], default: staff }
+      responses:
+        '201': { description: Created }
+
+  /api/users/{id}/role:
+    patch:
+      tags: [Users]
+      summary: Change a user's role (admin)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [guest, staff, admin] }
+      responses:
+        '200': { description: Updated }
