@@ -349,6 +349,8 @@ value as zero.
 
 ## Deployment
 
+**Full deployment guide: [DEPLOYMENT.md](DEPLOYMENT.md).**
+
 Both halves are configured and environment-driven.
 
 **API → Render.** `render.yaml` is a blueprint that creates the web service and a managed Postgres together:
