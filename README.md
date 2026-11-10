@@ -366,6 +366,10 @@ Both halves are configured and environment-driven.
 2. Set `VITE_API_URL` to the Render API URL.
 3. Deploy.
 
+> **Live database.** A managed Supabase PostgreSQL 17 instance is provisioned and seeded with the full
+> dataset (14 properties, 640 rooms, 600 bookings, 300 reviews, 225 guests), verified by running the
+> application's own occupancy/ADR/RevPAR query against it. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
 > **A note on live URLs.** The deployment configuration above is complete and ready to use, but the live
 > instances must be created under the owner's own Render and Vercel accounts — deployment credentials are not
 > something a repository can carry. The application has been verified running end to end locally against real

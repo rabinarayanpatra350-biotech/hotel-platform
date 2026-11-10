@@ -159,7 +159,9 @@ table(["Requirement", "Implementation", "Verified by"],
        ["Logging of important events", "pino structured logs with path-based secret redaction; `event_log` table", "Code review; redaction configured"],
        ["Unit and API tests", "100 tests across 7 files", "`npm test` — 100 passing"],
        ["GitHub Actions on every push", "`.github/workflows/ci.yml`", "Workflow committed; runs migrate → seed → test → build → secret scan"],
-       ["Deploy with environment-based config", "`render.yaml`, `web/vercel.json`, `.env.example`; no secrets in the repo", "CI job fails if a `.env` or private key is committed"],
+       ["Deploy with environment-based config", "`render.yaml`, `vercel.json`, `netlify.toml`, `.env.example`; no secrets in the repo", "CI job fails if a `.env` or private key is committed"],
+       ["**Live managed database**", "Supabase PostgreSQL 17, `ap-south-1` — provisioned and seeded", "**Live**: 14 properties, 640 rooms, 600 bookings; metrics query verified against it"],
+       ["**Live hosting**", "Netlify site provisioned with 11 environment variables and public access", "Site created; build runs on repository link"],
        ["**Stretch: email notifications**", "Queue-driven booking confirmation, staff alert and enquiry acknowledgement; three transports", "jobs.test.js — end-to-end delivery"],
        ["**Stretch: background job queue**", "PostgreSQL queue using `FOR UPDATE SKIP LOCKED`, retries with backoff, dedupe, stale reclaim", "jobs.test.js — 19 tests"],
        ["No exposed secrets", "`.gitignore`, `.env.example`, CI secret scan", "Dedicated CI job"],
@@ -324,6 +326,17 @@ para("**A refresh-token revocation that rolled itself back.** Reuse detection re
 para("**An amount parser that read nonsense as zero.** Stripping currency symbols from `not a number` leaves an "
      "empty string, and `Number('')` is `0`, which is finite — so an unparseable amount became a free stay. It "
      "now returns a validation error instead.")
+para("**Room numbers that were not unique within a property.** This one was found by deploying, not by testing, "
+     "and it is the most instructive of the four. Loading the dataset into the managed database produced **224 "
+     "rooms instead of 640**. The generator had been numbering rooms with a global counter, so the same room "
+     "number could appear twice inside one property; `UNIQUE (property_id, room_number)` then rejected the "
+     "duplicates and `ON CONFLICT DO NOTHING` discarded them **silently**. Because a room resolves its type by "
+     "code, a rejected room also removed that room from its type, and the property's `total_rooms` fell with it "
+     "— so availability and occupancy would have been wrong for reasons nothing in the logs explained. The "
+     "generator now numbers rooms per property; 640 of 640 are unique, and the quarantine counts are unchanged.")
+para("The lesson is that the local ETL used `ON CONFLICT … DO UPDATE` while the seed used `DO NOTHING`, and the "
+     "two behaved differently on the same input. Two loaders for one dataset is a bug waiting to happen; the "
+     "seed generator now shares the same tested functions and the discrepancy is gone.")
 
 h2("7.2 Continuous integration")
 para("`.github/workflows/ci.yml` runs on every push and pull request: parse-check every source file, migrate "
@@ -389,20 +402,42 @@ para("The queue is visible to staff at `GET /api/jobs` and the email log at `GET
      "deliberate: a background queue nobody can see is a queue nobody can debug. When a guest says the "
      "confirmation never arrived, the first question is whether the job ran, and the endpoint answers it.")
 
-h1("9. Deployment")
-para("Both halves are configured and entirely environment-driven; nothing is hard-coded.")
-para("**API on Render.** `render.yaml` is a blueprint that creates the web service and a managed PostgreSQL "
-     "instance together, with JWT secrets generated automatically and `DATABASE_URL` wired from the database. "
-     "The build step runs migrations so a deploy cannot leave the schema behind.")
-para("**Web on Vercel.** `web/vercel.json` sets the build command, the SPA rewrite (so client-side routes "
-     "resolve rather than 404), immutable caching on hashed assets, and three security headers.")
-para("**A note on live URLs.** The configuration above is complete and ready to use, but the live instances must "
-     "be created under the owner's own Render and Vercel accounts, because deployment credentials are not "
-     "something a repository can carry. The application has instead been verified running end to end locally "
-     "against a real PostgreSQL server: every route exercised, 125 tests passing, and the frontend building to "
-     "60 kB gzipped.")
+h1("9. Deployment and Live Infrastructure")
+para("The brief asks for the application to be deployed with environment-based configuration. This section "
+     "records what is live, what is configured, and what remains — stated plainly rather than implied.")
 
-# ============================================================== 9
+h2("9.1 The managed database is live")
+para("A **Supabase PostgreSQL 17 instance** has been provisioned in `ap-south-1` and seeded with the full "
+     "dataset through the same normalisation rules the tests cover:")
+table(["Entity", "Rows in the live database"],
+      [["Properties", "14"],
+       ["Rooms", "640 — every one unique within its property"],
+       ["Room types", "5 canonical categories"],
+       ["Guests", "225"],
+       ["Bookings", "600 (113 originally quoted in USD)"],
+       ["Reviews", "300"]],
+      caption="Table 7. The live database, verified by direct query.", fs=8.0)
+para("The verification was not a row count. The application's **own occupancy, ADR and RevPAR query** was run "
+     "against the live instance and returned real figures per property — for example Dadar Central: 66 "
+     "room-nights sold, an ADR of ₹3,173.12 and a RevPAR of ₹66.48 over a ninety-night window. The data layer "
+     "of the deployed system exists and computes correctly.")
+
+h2("9.2 Hosting is configured, not yet running")
+para("The API runs unchanged as a **Netlify function** (`netlify/functions/api.js` wraps the Express app with "
+     "`serverless-http`). This works precisely because `createApp()` never calls `listen()`: the same module "
+     "serves as a long-lived process locally and as a request handler on a serverless host.")
+para("A Netlify site has been created with **eleven environment variables** (the pooler connection string, both "
+     "JWT secrets, the CORS origin, and the rest) and public access enabled. `netlify.toml` declares the build "
+     "command, publish directory, functions directory, `/api/*` proxy and SPA fallback, so the build is "
+     "zero-configuration. The remaining action is to link the repository in Netlify's dashboard, which triggers "
+     "the first build.")
+para("**One deliberate adaptation, stated rather than hidden:** a serverless host has no separate worker "
+     "process, so one queued job is drained after each request. The queue keeps its real benefits — the job is "
+     "still enqueued transactionally with the booking, still retries with backoff, still deduplicates, and is "
+     "still observable at `/api/jobs` — only the *scheduling* moves.")
+para("`render.yaml` and `web/vercel.json` remain in the repository for the arrangement the brief names by "
+     "example: importing the repository as a Render Blueprint creates the API and a managed Postgres together.")
+
 h1("10. Design Decisions Worth Defending")
 table(["Decision", "Why"],
       [["Availability is a counting problem, not a lookup",
@@ -419,7 +454,7 @@ table(["Decision", "Why"],
         "Application code has bugs; constraints do not."],
        ["Quarantine rather than delete",
         "A rejected row is evidence. Keeping it with a reason means a mapping decision can be reviewed by someone who was not there when it was made."]],
-      caption="Table 7. Decisions and their justifications.", fs=7.8)
+      caption="Table 8. Decisions and their justifications.", fs=7.8)
 
 # ============================================================== 10
 h1("11. Limitations, and Scaling the Weakest Part")
@@ -451,7 +486,7 @@ table(["Pressure", "What breaks first", "The fix"],
        ["Uploads", "Local disk is not durable on an ephemeral host", "Object storage with a signed-URL upload"],
        ["Sessions", "Refresh tokens in one database", "Unchanged — the table is small and indexed. This is not the bottleneck"],
        ["Multi-region", "One database in one region", "Read replica for the dashboard; the write path stays single-primary"]],
-      caption="Table 8. What would need to change, in the order it would bite.", fs=7.8)
+      caption="Table 9. What would need to change, in the order it would bite.", fs=7.8)
 para("It is worth being explicit that **none of these is implemented**. The brief asked for a working platform "
      "and an explanation of how the weakest part would scale; inventing a distributed reservation system for "
      "fourteen hotels would have been a worse use of the time than making the core flows correct and tested. "
@@ -480,7 +515,7 @@ para("This report has described a complete full-stack platform for fourteen Mumb
      "access control, six CRUD resources, filtered search, image upload, a staff dashboard reporting occupancy, "
      "ADR and RevPAR, an ETL pipeline that normalises three named kinds of messy data and quarantines what it "
      "cannot justify, 125 passing tests against a real database, a PostgreSQL job queue carrying queued email notifications, a CI pipeline that runs on every push, and "
-     "deployment configuration for Render and Vercel.")
+     "deployment configuration for Netlify, Render and Vercel, and a live managed PostgreSQL database seeded and verified.")
 para("Every functional requirement in the brief is implemented and covered by a test. The two things not "
      "delivered are the live instances, which require the owner's own hosting accounts and are configured rather "
      "than deployed, and the concurrency-safe reservation hold, which is named as the weakest part of the design "
