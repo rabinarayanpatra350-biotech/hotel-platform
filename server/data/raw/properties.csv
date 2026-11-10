@@ -1,0 +1,15 @@
+property_code,property_name,locality,star_rating,total_rooms
+MUM-CSB,Colaba Sea Breeze,Colaba,4,42
+MUM-BAY,Bandra Bay House,Bandra West,4,36
+MUM-JUH,Juhu Sands,Juhu,5,58
+MUM-POW,Powai Lakeview,Powai,4,64
+MUM-WOR,Worli Seaface,Worli,5,48
+MUM-AND,Andheri Grand,Andheri East,3,72
+MUM-BOR,Borivali Greens,Borivali,3,40
+MUM-DAD,Dadar Central,Dadar,3,34
+MUM-MAL,Malabar Hill Residency,Malabar Hill,5,28
+MUM-LOW,Lower Parel Loft,Lower Parel,4,44
+MUM-GOR,Goregaon Park,Goregaon,3,56
+MUM-CHE,Chembur Orchid,Chembur,3,38
+MUM-VER,Versova Beach House,Versova,4,32
+MUM-MUL,Mulund Comfort,Mulund,2,46
