@@ -38,6 +38,23 @@ const config = {
     authMax: int(process.env.RATE_LIMIT_AUTH_MAX, 20),
   },
   logLevel: process.env.LOG_LEVEL || (isProd ? 'info' : 'debug'),
+  mail: {
+    // console (dev) | record (tests) | smtp (production)
+    transport: process.env.MAIL_TRANSPORT || (isProd ? 'smtp' : 'console'),
+    from: process.env.MAIL_FROM || 'Mumbai Boutique Hotels <bookings@example.com>',
+    host: process.env.SMTP_HOST || '',
+    port: int(process.env.SMTP_PORT, 587),
+    secure: bool(process.env.SMTP_SECURE, false),
+    user: process.env.SMTP_USER || '',
+    password: process.env.SMTP_PASSWORD || '',
+    // Where staff notifications go.
+    staffInbox: process.env.STAFF_NOTIFICATION_EMAIL || 'front-desk@example.com',
+  },
+  jobs: {
+    pollIntervalMs: int(process.env.JOB_POLL_INTERVAL_MS, 1000),
+    visibilityTimeoutMs: int(process.env.JOB_VISIBILITY_TIMEOUT_MS, 5 * 60 * 1000),
+    enabled: process.env.JOBS_ENABLED !== 'false',
+  },
   fx: {
     // Fallback USD->INR rate used only when a row carries no explicit rate.
     usdInr: Number(process.env.FX_USD_INR || 84.5),
@@ -54,6 +71,9 @@ if (isProd) {
   }
   if (!process.env.DATABASE_URL) problems.push('DATABASE_URL is required in production');
   if (config.cors.origins.includes('*')) problems.push('CORS_ORIGINS must not be "*" in production');
+  if (config.mail.transport === 'smtp' && !config.mail.host) {
+    problems.push('SMTP_HOST is required when MAIL_TRANSPORT is smtp');
+  }
 }
 if (problems.length) {
   throw new Error(`Invalid configuration:\n  - ${problems.join('\n  - ')}`);

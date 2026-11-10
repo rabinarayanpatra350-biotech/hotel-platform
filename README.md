@@ -188,6 +188,8 @@ Browse it at `GET /api/docs` once the API is running.
 | `GET` | `/api/metrics/occupancy-series` | staff | per-night series for charts |
 | `POST` | `/api/media` | staff | image upload, multipart |
 | `GET` `POST` `PATCH` | `/api/users` | **admin** | user administration |
+| `GET` | `/api/jobs` | staff | queue depth by status + recent jobs |
+| `GET` | `/api/jobs/emails` | staff | the email log — every send, with its outcome |
 
 Every response is either `{ "data": … }` or `{ "error": { "code", "message", "details" } }` — one shape,
 never a guess.
@@ -248,15 +250,81 @@ values worked out by hand.
 
 ---
 
+## Email notifications and the background job queue
+
+The brief's stretch requirement. Both are implemented, and the reason they exist together is that sending an
+email is a **network call to somebody else's server**: done inline in a request, a slow SMTP host becomes a slow
+booking and an SMTP outage becomes a failed booking — for a booking that was already committed.
+
+### The queue
+
+A job queue built on **PostgreSQL**, not Redis, using `FOR UPDATE SKIP LOCKED`:
+
+```sql
+UPDATE jobs SET status = 'running', locked_at = now(), locked_by = $1, attempts = attempts + 1
+WHERE id = (
+  SELECT id FROM jobs WHERE status = 'pending' AND run_at <= now()
+  ORDER BY run_at, created_at
+  FOR UPDATE SKIP LOCKED LIMIT 1
+)
+RETURNING *
+```
+
+`SKIP LOCKED` is the whole trick: concurrent workers step over rows another worker holds instead of blocking
+behind them, so throughput scales with workers rather than serialising behind one. Adding Redis to a deployment
+that already has Postgres would add a moving part and a failure mode for no capability we do not already have at
+this scale.
+
+What the queue does:
+
+- **Enqueued in the same transaction as the business event.** A booking and its confirmation email are written
+  together, so if the booking rolls back no email survives to tell a guest about a stay that does not exist.
+- **Retries with exponential backoff and jitter** — jitter matters, because a hundred jobs that failed at the
+  same instant would otherwise all retry at the same instant and recreate the outage that caused them to fail.
+- **Gives up after `max_attempts`** and records the final error, rather than retrying forever.
+- **Reclaims abandoned jobs.** A worker that dies mid-job leaves its row in `running`; anything locked longer
+  than the visibility timeout is treated as abandoned and re-queued.
+- **Deduplicates.** A `dedupe_key` makes enqueueing idempotent, so a retried request cannot send two emails.
+
+### The emails
+
+Three notifications, each queued rather than sent inline:
+
+| Trigger | Recipient | Template |
+|---|---|---|
+| Booking created | The guest | `booking_confirmation` — reference, dates, rooms, total |
+| Booking created | The front desk | `staff_booking_alert` — guest contact, dates, source |
+| Enquiry submitted | The enquirer | `enquiry_acknowledgement` — quotes their message back |
+
+Three transports, chosen by configuration and never by a code change: `console` (development — prints the email
+to the log), `record` (tests — sends nothing), and `smtp` (production, via nodemailer). Every attempt is written
+to `email_log` whatever the outcome, so *"we told this guest"* is a queryable fact rather than an assumption.
+
+Templates are plain functions with **every interpolated value escaped** — a guest's name is user input, and an
+email body is a place where an unescaped name becomes HTML injection.
+
+### Running it
+
+```bash
+cd server
+npm run worker        # the worker loop, in its own process
+# or, for both together:
+npm run dev:all
+```
+
+The queue is visible to staff at `GET /api/jobs` and the email log at `GET /api/jobs/emails` — because a
+background queue nobody can see is a queue nobody can debug. When a guest says the confirmation never arrived,
+the first question is whether the job ran, and that endpoint answers it.
+
 ## Testing
 
 ```bash
 cd server
-npm test              # 100 tests
+npm test              # 125 tests
 npm run test:coverage # with a coverage report
 ```
 
-**100 tests across 7 files**, all passing:
+**125 tests across 9 files**, all passing:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -267,6 +335,8 @@ npm run test:coverage # with a coverage report
 | `tests/api/properties.test.js` | 12 | CRUD, filters, sorting, injection safety |
 | `tests/api/bookings.test.js` | 13 | public booking, validation, overbooking, back-to-back stays |
 | `tests/api/metrics.test.js` | 10 | occupancy / ADR / RevPAR against hand-computed values |
+| `tests/api/jobs.test.js` | 19 | enqueue, claim, **ten workers never claim the same job**, retry/backoff, exhaustion, dedupe, stale reclaim, worker dispatch, and end-to-end email delivery |
+| `tests/unit/emailTemplates.test.js` | 6 | subject/body content, Indian money formatting, HTML escaping |
 
 The API tests run against a **real PostgreSQL** instance — the suite starts one, applies the real schema and
 seeds it through the real ETL, so they test the code that ships rather than a fixture that could drift.
@@ -297,7 +367,7 @@ Both halves are configured and environment-driven.
 > **A note on live URLs.** The deployment configuration above is complete and ready to use, but the live
 > instances must be created under the owner's own Render and Vercel accounts — deployment credentials are not
 > something a repository can carry. The application has been verified running end to end locally against real
-> PostgreSQL: every route exercised, 100 tests passing, and the frontend building to 60 kB gzipped.
+> PostgreSQL: every route exercised, 125 tests passing, and the frontend building to 60 kB gzipped.
 
 ---
 
@@ -331,7 +401,7 @@ room_number)`, `UNIQUE lower(email) WHERE email IS NOT NULL`. Application code h
 
 ```
 hotel-platform/
-├── .github/workflows/ci.yml      # parse → migrate → seed → test → build → secret scan
+├── .github/workflows/ci.yml      # parse → migrate → seed → 125 tests → build → secret scan
 ├── .env.example
 ├── render.yaml                   # API + Postgres blueprint
 ├── docs/
@@ -350,6 +420,9 @@ hotel-platform/
 │   │   ├── middleware/auth.js    # requireAuth, requireRole, optionalAuth
 │   │   ├── routes/               # one file per resource
 │   │   ├── services/             # auth, booking, metrics
+│   │   ├── jobs/                  # queue, worker, handler registry
+│   │   ├── lib/mailer.js          # console / record / smtp transports
+│   │   ├── lib/emailTemplates.js  # escaped, plain-function templates
 │   │   └── etl/                  # normalise, roomTypeMap, run
 │   ├── data/raw/                 # the 14 properties' exports
 │   ├── scripts/                  # raw-data generator, dev database

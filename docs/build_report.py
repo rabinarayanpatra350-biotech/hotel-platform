@@ -139,7 +139,7 @@ table(["Requirement", "Where it is", "Status"],
        ["API documentation", "`docs/openapi.yaml` (OpenAPI 3.1) and a browsable page at `/api/docs`", "Delivered"],
        ["Architecture diagram", "`docs/diagrams/architecture.png` and `docs/architecture.md`", "Delivered"],
        ["README with setup steps", "`README.md` — quick start, environment, testing, deployment", "Delivered"],
-       ["Explanation of scaling the weakest part", "`README.md` and Section 10 of this report", "Delivered"]],
+       ["Explanation of scaling the weakest part", "`README.md` and Section 11 of this report", "Delivered"]],
       caption="Table 1. The brief's deliverables and where each one is.")
 
 # ============================================================== 2
@@ -160,6 +160,8 @@ table(["Requirement", "Implementation", "Verified by"],
        ["Unit and API tests", "100 tests across 7 files", "`npm test` — 100 passing"],
        ["GitHub Actions on every push", "`.github/workflows/ci.yml`", "Workflow committed; runs migrate → seed → test → build → secret scan"],
        ["Deploy with environment-based config", "`render.yaml`, `web/vercel.json`, `.env.example`; no secrets in the repo", "CI job fails if a `.env` or private key is committed"],
+       ["**Stretch: email notifications**", "Queue-driven booking confirmation, staff alert and enquiry acknowledgement; three transports", "jobs.test.js — end-to-end delivery"],
+       ["**Stretch: background job queue**", "PostgreSQL queue using `FOR UPDATE SKIP LOCKED`, retries with backoff, dedupe, stale reclaim", "jobs.test.js — 19 tests"],
        ["No exposed secrets", "`.gitignore`, `.env.example`, CI secret scan", "Dedicated CI job"],
        ["Key pages under 2 seconds", "60 kB gzipped bundle, no framework, code-split routes", "Build output measured"]],
       caption="Table 2. Requirement-to-implementation map.", fs=7.6)
@@ -295,7 +297,7 @@ h1("7. Testing and Continuous Integration")
 figure("docs/figures/fig4_tests.png", 6.3,
        "Figure 4. The test suite. Purple bars are pure unit tests; green bars exercise the API against a real "
        "PostgreSQL instance.")
-para("**100 tests across seven files, all passing.** The API tests run against a **real PostgreSQL instance** — "
+para("**125 tests across nine files, all passing.** The API tests run against a **real PostgreSQL instance** — "
      "the suite starts one, applies the real schema, and seeds it through the real ETL, so they test the code "
      "that ships rather than a hand-built fixture that could drift away from it.")
 table(["File", "Tests", "Covers"],
@@ -305,7 +307,9 @@ table(["File", "Tests", "Covers"],
        ["`tests/api/rbac.test.js`", "7", "Guest / staff / admin boundaries on real endpoints"],
        ["`tests/api/properties.test.js`", "12", "CRUD, filters, sorting, sort-column injection safety"],
        ["`tests/api/bookings.test.js`", "13", "Public booking, validation, overbooking, back-to-back stays"],
-       ["`tests/api/metrics.test.js`", "10", "Occupancy, ADR and RevPAR against hand-computed values"]],
+       ["`tests/api/metrics.test.js`", "10", "Occupancy, ADR and RevPAR against hand-computed values"],
+       ["`tests/api/jobs.test.js`", "19", "Enqueue, claim, ten workers never claiming the same job, retry and backoff, exhaustion, dedupe, stale reclaim, and end-to-end email delivery"],
+       ["`tests/unit/emailTemplates.test.js`", "6", "Subject and body content, Indian money formatting, HTML escaping"]],
       caption="Table 4. The test suite.", fs=7.8)
 
 h2("7.1 Three bugs the tests found")
@@ -323,13 +327,69 @@ para("**An amount parser that read nonsense as zero.** Stripping currency symbol
 
 h2("7.2 Continuous integration")
 para("`.github/workflows/ci.yml` runs on every push and pull request: parse-check every source file, migrate "
-     "against a **PostgreSQL service container**, seed through the ETL, run the full suite, build the frontend, "
+     "against a **PostgreSQL service container**, seed through the ETL, run all 125 tests, build the frontend, "
      "and scan the tracked tree for committed `.env` files or private keys. The secret scan is a separate job "
      "because \"no exposed secrets\" is a success criterion in the brief, and a criterion that is not checked is "
      "not a criterion.")
 
 # ============================================================== 8
-h1("8. Deployment")
+h1("8. Email Notifications and the Background Job Queue")
+para("The brief lists email notifications and a background job queue as a stretch requirement. Both are "
+     "implemented, and the reason they belong together is that sending an email is a **network call to somebody "
+     "else's server**. Done inline in a request, a slow SMTP host becomes a slow booking, and an SMTP outage "
+     "becomes a failed booking — for a booking that was already committed to the database.")
+
+h2("8.1 A queue on PostgreSQL rather than Redis")
+para("The queue is a table, and workers claim rows with `FOR UPDATE SKIP LOCKED`:")
+code("UPDATE jobs SET status = 'running', locked_at = now(), locked_by = $1, attempts = attempts + 1\n"
+     "WHERE id = (\n"
+     "  SELECT id FROM jobs WHERE status = 'pending' AND run_at <= now()\n"
+     "  ORDER BY run_at, created_at\n"
+     "  FOR UPDATE SKIP LOCKED LIMIT 1\n"
+     ")\n"
+     "RETURNING *")
+para("`SKIP LOCKED` is the whole trick. Concurrent workers step over rows another worker is holding instead of "
+     "blocking behind them, so throughput scales with the number of workers rather than serialising behind one. "
+     "Adding Redis to a deployment that already has PostgreSQL would add a moving part and a failure mode for no "
+     "capability we do not already have at this scale — and a queue in the same database as the booking can be "
+     "enqueued in the **same transaction** as the booking.")
+para("That transactional property is the design's most important detail. The confirmation email job is inserted "
+     "inside the transaction that creates the booking, so if the booking rolls back no email survives to tell a "
+     "guest about a stay that does not exist; if it commits, the jobs are guaranteed to be waiting. A queue fed "
+     "after the commit would have a window in which a booking exists with no notification queued.")
+
+h2("8.2 What the queue does under failure")
+table(["Behaviour", "Why it matters"],
+      [["**Retries with exponential backoff and jitter**",
+        "Jitter matters: a hundred jobs that failed at the same instant would otherwise all retry at the same instant and recreate the outage that caused them to fail."],
+       ["**Gives up after `max_attempts`, recording the final error**",
+        "A job that can never succeed must not retry forever and starve the queue."],
+       ["**Reclaims abandoned jobs**",
+        "A worker that dies mid-job leaves its row in `running`. Anything locked longer than the visibility timeout is treated as abandoned and re-queued, so a crash delays a job rather than losing it."],
+       ["**Deduplicates on a key**",
+        "Enqueueing becomes idempotent, so a retried HTTP request cannot send the same confirmation twice."],
+       ["**Claims one job at a time per worker**",
+        "Trivially correct. Throughput is scaled by running more workers, which the queue supports because of SKIP LOCKED — a deployment decision, not a rewrite."]],
+      caption="Table 5. Queue behaviour under failure.", fs=7.8)
+
+h2("8.3 The emails")
+table(["Trigger", "Recipient", "Template"],
+      [["Booking created", "The guest", "`booking_confirmation` — reference, dates, rooms, total"],
+       ["Booking created", "The front desk", "`staff_booking_alert` — guest contact, dates, source"],
+       ["Enquiry submitted", "The enquirer", "`enquiry_acknowledgement` — quotes their message back"]],
+      caption="Table 6. The three notifications, all queued rather than sent inline.", fs=7.8)
+para("Three transports are selected by configuration and never by a code change: `console` for development "
+     "(prints the email to the log, so you can see exactly what a guest would receive without a mail server), "
+     "`record` for tests (sends nothing), and `smtp` for production via nodemailer. **Every attempt is written to "
+     "`email_log` whatever the outcome**, so \"we told this guest\" is a queryable fact rather than an assumption.")
+para("Templates are plain functions with every interpolated value escaped. A guest's name is user input, and an "
+     "email body is exactly the place where an unescaped name becomes HTML injection; there is a test that posts "
+     "`<script>` as a name and asserts it comes out as `&lt;script&gt;`.")
+para("The queue is visible to staff at `GET /api/jobs` and the email log at `GET /api/jobs/emails`. That is "
+     "deliberate: a background queue nobody can see is a queue nobody can debug. When a guest says the "
+     "confirmation never arrived, the first question is whether the job ran, and the endpoint answers it.")
+
+h1("9. Deployment")
 para("Both halves are configured and entirely environment-driven; nothing is hard-coded.")
 para("**API on Render.** `render.yaml` is a blueprint that creates the web service and a managed PostgreSQL "
      "instance together, with JWT secrets generated automatically and `DATABASE_URL` wired from the database. "
@@ -339,11 +399,11 @@ para("**Web on Vercel.** `web/vercel.json` sets the build command, the SPA rewri
 para("**A note on live URLs.** The configuration above is complete and ready to use, but the live instances must "
      "be created under the owner's own Render and Vercel accounts, because deployment credentials are not "
      "something a repository can carry. The application has instead been verified running end to end locally "
-     "against a real PostgreSQL server: every route exercised, 100 tests passing, and the frontend building to "
+     "against a real PostgreSQL server: every route exercised, 125 tests passing, and the frontend building to "
      "60 kB gzipped.")
 
 # ============================================================== 9
-h1("9. Design Decisions Worth Defending")
+h1("10. Design Decisions Worth Defending")
 table(["Decision", "Why"],
       [["Availability is a counting problem, not a lookup",
         "A room type is available only if, for every night of the stay, rooms already sold are fewer than rooms that exist. Overlap uses the half-open interval [check_in, check_out), so a guest leaving on the 10th frees the room for a guest arriving on the 10th. There is a test for exactly that."],
@@ -359,14 +419,14 @@ table(["Decision", "Why"],
         "Application code has bugs; constraints do not."],
        ["Quarantine rather than delete",
         "A rejected row is evidence. Keeping it with a reason means a mapping decision can be reviewed by someone who was not there when it was made."]],
-      caption="Table 5. Decisions and their justifications.", fs=7.8)
+      caption="Table 7. Decisions and their justifications.", fs=7.8)
 
 # ============================================================== 10
-h1("10. Limitations, and Scaling the Weakest Part")
+h1("11. Limitations, and Scaling the Weakest Part")
 para("The brief asks for an explanation of how the weakest part of the design would be scaled. The honest "
      "answer is **the availability check**, not the API tier.")
 
-h2("10.1 What is wrong with it")
+h2("11.1 What is wrong with it")
 para("`assertAvailable` counts rooms and bookings for the requested nights on every booking. It is correct, and "
      "at fourteen properties it is fast. It does not survive a busy Friday night at scale: two concurrent "
      "requests for the last room can both read \"1 free\" and both insert, because nothing locks the inventory "
@@ -374,7 +434,7 @@ para("`assertAvailable` counts rooms and bookings for the requested nights on ev
      "atomicity, not mutual exclusion — two transactions can both read the same committed state before either "
      "writes.")
 
-h2("10.2 How it would be fixed")
+h2("11.2 How it would be fixed")
 para("The fix is a **reservation hold with a database-level guarantee**, in one of two forms. Either an inventory "
      "row per room type per night, taken with `SELECT … FOR UPDATE` so the second request blocks until the first "
      "commits; or a PostgreSQL exclusion constraint on a `daterange` column, which makes the database itself "
@@ -383,7 +443,7 @@ para("The fix is a **reservation hold with a database-level guarantee**, in one 
 para("Either way the hold needs a short expiry, so an abandoned checkout does not block the room indefinitely, "
      "and the confirmation step must be idempotent so a retried request does not create two bookings.")
 
-h2("10.3 What else would change at scale")
+h2("11.3 What else would change at scale")
 table(["Pressure", "What breaks first", "The fix"],
       [["Concurrent bookings on the last room", "The availability race above", "Reservation hold with a row lock or exclusion constraint"],
        ["Read volume on the property list", "Repeated aggregation per request", "Cache the list; it changes rarely. Invalidate on write"],
@@ -391,14 +451,14 @@ table(["Pressure", "What breaks first", "The fix"],
        ["Uploads", "Local disk is not durable on an ephemeral host", "Object storage with a signed-URL upload"],
        ["Sessions", "Refresh tokens in one database", "Unchanged — the table is small and indexed. This is not the bottleneck"],
        ["Multi-region", "One database in one region", "Read replica for the dashboard; the write path stays single-primary"]],
-      caption="Table 6. What would need to change, in the order it would bite.", fs=7.8)
+      caption="Table 8. What would need to change, in the order it would bite.", fs=7.8)
 para("It is worth being explicit that **none of these is implemented**. The brief asked for a working platform "
      "and an explanation of how the weakest part would scale; inventing a distributed reservation system for "
      "fourteen hotels would have been a worse use of the time than making the core flows correct and tested. "
      "Naming the limit is more useful than hiding it.")
 
 # ============================================================== 11
-h1("11. What Was Learned")
+h1("12. What Was Learned")
 para("**A test that asserts a computed number is worth ten that assert a status code.** The revenue double-count "
      "would have passed any test that only checked for HTTP 200. It failed the moment the assertion was against "
      "a figure worked out by hand — which is why the metrics test is written that way.")
@@ -414,12 +474,12 @@ para("**Normalising data is a design decision, not a cleaning step.** Deciding t
      "would have been faster and would have quietly mispriced a hotel.")
 
 # ============================================================== 12
-h1("12. Conclusion")
+h1("13. Conclusion")
 para("This report has described a complete full-stack platform for fourteen Mumbai boutique properties: a React "
      "front end, an Express and PostgreSQL API, JWT authentication with rotating refresh tokens, role-based "
      "access control, six CRUD resources, filtered search, image upload, a staff dashboard reporting occupancy, "
      "ADR and RevPAR, an ETL pipeline that normalises three named kinds of messy data and quarantines what it "
-     "cannot justify, 100 passing tests against a real database, a CI pipeline that runs on every push, and "
+     "cannot justify, 125 passing tests against a real database, a PostgreSQL job queue carrying queued email notifications, a CI pipeline that runs on every push, and "
      "deployment configuration for Render and Vercel.")
 para("Every functional requirement in the brief is implemented and covered by a test. The two things not "
      "delivered are the live instances, which require the owner's own hosting accounts and are configured rather "

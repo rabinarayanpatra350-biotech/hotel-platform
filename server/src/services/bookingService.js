@@ -1,4 +1,6 @@
 import { query, withTransaction } from '../db/pool.js';
+import { enqueue } from '../jobs/queue.js';
+import config from '../config/index.js';
 import { ApiError } from '../lib/errors.js';
 
 /**
@@ -140,6 +142,43 @@ export async function createBooking(payload, actorId) {
        payload.roomsBooked, payload.adults, payload.children, rateInr, payload.source,
        payload.status, actorId || null],
     );
-    return rows[0];
+    const booking = rows[0];
+
+    // Enqueue the notification emails inside the SAME transaction as the booking.
+    // That is the whole point of doing it here rather than after the commit: if
+    // the booking rolls back, no email job survives to tell a guest about a stay
+    // that does not exist. If it commits, the jobs are guaranteed to be waiting.
+    if (booking.status !== 'cancelled') {
+      const detail = await client.query(
+        `SELECT g.full_name AS guest_name, g.email AS guest_email, p.name AS property_name
+         FROM guests g, properties p WHERE g.id = $1 AND p.id = $2`,
+        [guestId, payload.propertyId],
+      );
+      const d = detail.rows[0] || {};
+      const nights = Math.round(
+        (Date.parse(payload.checkOut) - Date.parse(payload.checkIn)) / 86_400_000,
+      );
+      const emailData = {
+        reference: booking.reference,
+        propertyName: d.property_name,
+        guestName: d.guest_name,
+        guestEmail: d.guest_email,
+        checkIn: payload.checkIn,
+        checkOut: payload.checkOut,
+        nights,
+        roomsBooked: payload.roomsBooked,
+        rateInr: Number(booking.rate_inr),
+        source: booking.source,
+      };
+      if (d.guest_email) {
+        await enqueue('booking_confirmation', { booking: emailData },
+          { client, dedupeKey: `booking-confirm:${booking.id}` });
+      }
+      await enqueue('staff_booking_alert',
+        { booking: emailData, to: config.mail.staffInbox },
+        { client, dedupeKey: `booking-staff:${booking.id}` });
+    }
+
+    return booking;
   });
 }

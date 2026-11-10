@@ -9,6 +9,7 @@ import enquiryRoutes from './enquiries.js';
 import metricsRoutes from './metrics.js';
 import mediaRoutes from './media.js';
 import userRoutes from './users.js';
+import jobRoutes from './jobs.js';
 import { query } from '../db/pool.js';
 import { asyncHandler } from '../lib/errors.js';
 
@@ -36,5 +37,6 @@ router.use('/enquiries', enquiryRoutes);
 router.use('/metrics', metricsRoutes);
 router.use('/media', mediaRoutes);
 router.use('/users', userRoutes);
+router.use('/jobs', jobRoutes);
 
 export default router;

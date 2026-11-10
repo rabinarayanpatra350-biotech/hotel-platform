@@ -4,6 +4,8 @@ import { asyncHandler, ApiError } from '../lib/errors.js';
 import { validateBody, validateQuery } from '../lib/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { enquiryCreateSchema, enquiryUpdateSchema, enquiryQuerySchema } from '../schemas.js';
+import { withTransaction } from '../db/pool.js';
+import { enqueue } from '../jobs/queue.js';
 
 const router = Router();
 const map = (r) => ({
@@ -14,12 +16,20 @@ const map = (r) => ({
 // Public: this is the enquiry form on the website.
 router.post('/', validateBody(enquiryCreateSchema), asyncHandler(async (req, res) => {
   const b = req.body;
-  const { rows } = await query(
-    `INSERT INTO enquiries (property_id, name, email, phone, message) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [b.propertyId || null, b.name, b.email, b.phone || null, b.message],
-  );
-  req.log?.info({ enquiryId: rows[0].id }, 'enquiry received');
-  res.status(201).json({ data: map(rows[0]) });
+  // The enquiry and its acknowledgement are written together: the guest is told
+  // their message arrived only if it actually did.
+  const row = await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `INSERT INTO enquiries (property_id, name, email, phone, message) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [b.propertyId || null, b.name, b.email, b.phone || null, b.message],
+    );
+    await enqueue('enquiry_acknowledgement',
+      { enquiry: { name: b.name, email: b.email, message: b.message } },
+      { client, dedupeKey: `enquiry-ack:${rows[0].id}` });
+    return rows[0];
+  });
+  req.log?.info({ enquiryId: row.id }, 'enquiry received');
+  res.status(201).json({ data: map(row) });
 }));
 
 router.get('/', requireAuth, requireRole('admin', 'staff'), validateQuery(enquiryQuerySchema), asyncHandler(async (req, res) => {

@@ -224,3 +224,49 @@ SELECT b.id            AS booking_id,
 FROM bookings b
 JOIN LATERAL generate_series(b.check_in, b.check_out - INTERVAL '1 day', INTERVAL '1 day') AS g(d) ON TRUE
 WHERE b.status <> 'cancelled';
+
+-- ---------------------------------------------------------------- jobs
+-- A background job queue built on PostgreSQL rather than Redis. Workers claim
+-- rows with FOR UPDATE SKIP LOCKED, which is the canonical way to build a queue
+-- on Postgres: two workers cannot claim the same row, and a worker that dies
+-- mid-job simply leaves its lock to time out and the job to be reclaimed.
+--
+-- The reason for a queue at all is that sending an email is a network call to
+-- somebody else's server. Doing it inline in a request means a slow SMTP host
+-- becomes a slow booking, and an SMTP outage becomes a failed booking — for a
+-- booking that was actually written to the database successfully.
+CREATE TABLE IF NOT EXISTS jobs (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type          TEXT NOT NULL,
+  payload       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status        TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'running', 'done', 'failed', 'cancelled')),
+  attempts      INTEGER NOT NULL DEFAULT 0,
+  max_attempts  INTEGER NOT NULL DEFAULT 5,
+  run_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  locked_at     TIMESTAMPTZ,
+  locked_by     TEXT,
+  last_error    TEXT,
+  dedupe_key    TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS jobs_claim_idx ON jobs (status, run_at)
+  WHERE status IN ('pending', 'running');
+CREATE UNIQUE INDEX IF NOT EXISTS jobs_dedupe_idx ON jobs (dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+-- One row per email we attempted to send. Kept separately from jobs so that the
+-- business record of "we told this guest" survives any pruning of the queue.
+CREATE TABLE IF NOT EXISTS email_log (
+  id            BIGSERIAL PRIMARY KEY,
+  job_id        UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  to_address    TEXT NOT NULL,
+  subject       TEXT NOT NULL,
+  template      TEXT NOT NULL,
+  status        TEXT NOT NULL CHECK (status IN ('sent', 'failed')),
+  provider      TEXT NOT NULL DEFAULT 'console',
+  provider_id   TEXT,
+  error         TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS email_log_created_idx ON email_log (created_at DESC);

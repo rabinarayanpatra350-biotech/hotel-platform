@@ -12,3 +12,7 @@ try {
 }
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'silent';
+// Tests record emails instead of sending them, and never start the polling
+// worker — the queue is driven explicitly by calling worker.tick().
+process.env.MAIL_TRANSPORT = 'record';
+process.env.JOBS_ENABLED = 'false';
