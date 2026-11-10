@@ -75,8 +75,12 @@ const OVERRIDES = [
 const invRows = ['property_code,room_number,room_type_raw,floor,nightly_rate,currency'];
 const roomsByProperty = new Map(); // real inventory, so bookings mostly reference real rooms
 let roomSeq = 0;
+// Room numbers must be unique WITHIN a property: the schema has
+// UNIQUE (property_id, room_number), and a global counter could emit the same
+// number twice inside one property, silently losing rooms on load.
 for (const [code, , , , totalRooms] of PROPERTIES) {
   const perType = Math.max(2, Math.round(totalRooms / 5));
+  let idxInProperty = 0;
   for (const [canonical, aliases] of Object.entries(ALIASES)) {
     const alias = pick(aliases);
     const override = OVERRIDES.find((o) => o.property === code && o.alias === alias);
@@ -92,7 +96,8 @@ for (const [code, , , , totalRooms] of PROPERTIES) {
       const rowUsd = code === 'MUM-WOR' ? (i % 2 === 0) : useUsd;
       const rate = rowUsd ? Math.round((rateInr / 84.5) / 5) * 5 : rateInr;
       const currency = rowUsd ? pick(['USD', 'usd', '$']) : pick(['INR', 'INR', 'Rs']);
-      const roomNumber = `${100 + Math.floor(roomSeq / 40)}${String(i + 1).padStart(2, '0')}`;
+      idxInProperty += 1;
+      const roomNumber = `${100 + Math.floor(idxInProperty / 100)}${String(idxInProperty % 100).padStart(2, '0')}`;
       if (!roomsByProperty.has(code)) roomsByProperty.set(code, []);
       roomsByProperty.get(code).push({ roomNumber, canonical: effective });
       invRows.push([code, roomNumber, alias, int(1, 12), rate, currency].join(','));
