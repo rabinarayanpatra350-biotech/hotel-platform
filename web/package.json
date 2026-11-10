@@ -1,0 +1,21 @@
+{
+  "name": "hotel-platform-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Guest-facing site and staff dashboard for the Mumbai boutique hotel group",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
