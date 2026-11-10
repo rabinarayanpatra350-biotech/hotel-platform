@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mumbai Boutique Hotels API — reference</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .topbar { background: #14532d; color: #fff; padding: 14px 24px; }
+    .topbar h1 { margin: 0; font-size: 17px; font-weight: 700; }
+    .topbar p { margin: 4px 0 0; font-size: 13px; color: #c9e6d5; }
+    #swagger-ui { max-width: 1180px; margin: 0 auto; padding: 0 16px 40px; }
+    .fallback { max-width: 820px; margin: 32px auto; padding: 20px; border: 1px solid #e2e8ee;
+                border-radius: 10px; font-size: 14px; }
+    .fallback code { background: #eef2f6; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Mumbai Boutique Hotels API — v1.0.0</h1>
+    <p>OpenAPI 3.1 · <a href="/docs/openapi/openapi.yaml" style="color:#c9e6d5">raw specification</a></p>
+  </div>
+  <div id="swagger-ui"></div>
+  <div class="fallback" id="fallback" hidden>
+    <strong>Interactive docs could not load.</strong>
+    <p>The Swagger UI assets are served from a CDN and appear to be blocked on this network. The full
+    specification is available as raw YAML at <code>/docs/openapi/openapi.yaml</code>, and in the repository at
+    <code>docs/openapi.yaml</code>.</p>
+  </div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    if (window.SwaggerUIBundle) {
+      window.SwaggerUIBundle({ url: '/docs/openapi/openapi.yaml', dom_id: '#swagger-ui', deepLinking: true });
+    } else {
+      document.getElementById('fallback').hidden = false;
+    }
+  </script>
+</body>
+</html>
