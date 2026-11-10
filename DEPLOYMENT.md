@@ -1,5 +1,37 @@
 # Deployment
 
+## Live now: GitHub Pages
+
+### https://rabinarayanpatra350-biotech.github.io/hotel-platform/
+
+Published from `/docs` on `main` by GitHub's own Pages build — no hosting account, no CLI, no token.
+`docs/index.html` is a self-contained static build of the frontend that talks to the **same PostgreSQL database**
+through Supabase's REST API instead of the Express server.
+
+**What it carries:** property search and filters, property detail with room types, real inventory and reviews,
+booking and enquiry submission (both write to the live database), and the staff dashboard computing occupancy,
+ADR and RevPAR from real bookings.
+
+**What it cannot carry, because GitHub Pages serves files and runs no code:** sign-in, JWT sessions, and the
+staff/admin roles those sessions gate. The full server-side application is in `server/` and is what the test
+suite covers. The page says this in a visible note rather than letting a visitor discover it.
+
+**Security.** With the browser talking to the database directly, row-level security is the only boundary. Every
+table is closed by default and opened only where the public site genuinely needs it:
+
+| Table | Anonymous access |
+|---|---|
+| `properties`, `room_types`, `rooms`, `reviews` | SELECT |
+| `bookings`, `guests`, `enquiries` | INSERT only — never readable |
+| `property_metrics`, `room_availability` (views) | SELECT, aggregate-only, no guest records |
+| `users`, `refresh_tokens`, `jobs`, `email_log`, `etl_*` | **none — verified to return 0 rows** |
+
+Verified by switching the database session to the `anon` role and querying each table: the catalogue returns
+14 properties / 5 room types / 640 rooms / 300 reviews, and the four sensitive tables return 0 rows.
+
+---
+
+
 The application is deployed as **two managed services** plus a **managed database**. Everything is
 environment-driven; no secret is in the repository.
 

@@ -161,7 +161,8 @@ table(["Requirement", "Implementation", "Verified by"],
        ["GitHub Actions on every push", "`.github/workflows/ci.yml`", "Workflow committed; runs migrate → seed → test → build → secret scan"],
        ["Deploy with environment-based config", "`render.yaml`, `vercel.json`, `netlify.toml`, `.env.example`; no secrets in the repo", "CI job fails if a `.env` or private key is committed"],
        ["**Live managed database**", "Supabase PostgreSQL 17, `ap-south-1` — provisioned and seeded", "**Live**: 14 properties, 640 rooms, 600 bookings; metrics query verified against it"],
-       ["**Live hosting**", "Netlify site provisioned with 11 environment variables and public access", "Site created; build runs on repository link"],
+       ["**Live hosting**", "GitHub Pages, published from `/docs` — `https://rabinarayanpatra350-biotech.github.io/hotel-platform/`", "**Live**: build succeeded; reads the live database"],
+       ["**Live full-stack hosting**", "Netlify site provisioned with 11 environment variables and public access", "Site created; build runs on repository link"],
        ["**Stretch: email notifications**", "Queue-driven booking confirmation, staff alert and enquiry acknowledgement; three transports", "jobs.test.js — end-to-end delivery"],
        ["**Stretch: background job queue**", "PostgreSQL queue using `FOR UPDATE SKIP LOCKED`, retries with backoff, dedupe, stale reclaim", "jobs.test.js — 19 tests"],
        ["No exposed secrets", "`.gitignore`, `.env.example`, CI secret scan", "Dedicated CI job"],
@@ -438,6 +439,34 @@ para("**One deliberate adaptation, stated rather than hidden:** a serverless hos
 para("`render.yaml` and `web/vercel.json` remain in the repository for the arrangement the brief names by "
      "example: importing the repository as a Render Blueprint creates the API and a managed Postgres together.")
 
+h2("9.3 A live build on GitHub Pages")
+para("The hosting providers the brief names could not be reached from the build environment used here: Netlify, "
+     "Vercel and Glitch are all refused by its egress policy, and Replit requires a paid subscription. Rather than "
+     "leave the project with no public URL, a **static build was published to GitHub Pages**, which needs no "
+     "hosting account and no credential:")
+para("**https://rabinarayanpatra350-biotech.github.io/hotel-platform/**")
+para("It is a genuine live build rather than a mock. `docs/index.html` is a self-contained page that talks to the "
+     "**same PostgreSQL database** through Supabase's REST API instead of the Express server, so property search, "
+     "room types, real inventory, guest reviews, booking submission, enquiry submission and the occupancy / ADR / "
+     "RevPAR dashboard all read and write live data.")
+para("**What it does not carry, and why.** GitHub Pages serves files and runs no code, so there is no server to "
+     "issue a JWT or to hold a refresh token. Sign-in and the staff/admin roles those sessions gate therefore "
+     "exist only in the full application in `server/`. The page states this in a visible note rather than letting "
+     "a visitor discover it, and the dashboard is explicitly read-only.")
+para("**Row-level security becomes the security boundary.** With a browser talking to the database directly, the "
+     "database is the only thing between a visitor and the data. Every table is closed by default and opened "
+     "only where the public site genuinely needs it:")
+table(["Table", "Anonymous access"],
+      [["`properties`, `room_types`, `rooms`, `reviews`", "SELECT"],
+       ["`bookings`, `guests`, `enquiries`", "INSERT only — never readable"],
+       ["`property_metrics`, `room_availability` (views)", "SELECT — aggregate only, no guest records"],
+       ["`users`, `refresh_tokens`, `jobs`, `email_log`, `etl_*`", "**none**"]],
+      caption="Table 8. Row-level security on the live database.", fs=8.0)
+para("This was verified rather than assumed: switching the database session to the `anon` role and querying each "
+     "table returns 14 properties, 5 room types, 640 rooms, 300 reviews and 70 availability rows — and **0 rows** "
+     "from `users`, `refresh_tokens`, `jobs` and `email_log`. The password hashes are unreachable from the "
+     "browser, which is the only property that matters when the client can address the database directly.")
+
 h1("10. Design Decisions Worth Defending")
 table(["Decision", "Why"],
       [["Availability is a counting problem, not a lookup",
@@ -454,7 +483,7 @@ table(["Decision", "Why"],
         "Application code has bugs; constraints do not."],
        ["Quarantine rather than delete",
         "A rejected row is evidence. Keeping it with a reason means a mapping decision can be reviewed by someone who was not there when it was made."]],
-      caption="Table 8. Decisions and their justifications.", fs=7.8)
+      caption="Table 9. Decisions and their justifications.", fs=7.8)
 
 # ============================================================== 10
 h1("11. Limitations, and Scaling the Weakest Part")
@@ -486,7 +515,7 @@ table(["Pressure", "What breaks first", "The fix"],
        ["Uploads", "Local disk is not durable on an ephemeral host", "Object storage with a signed-URL upload"],
        ["Sessions", "Refresh tokens in one database", "Unchanged — the table is small and indexed. This is not the bottleneck"],
        ["Multi-region", "One database in one region", "Read replica for the dashboard; the write path stays single-primary"]],
-      caption="Table 9. What would need to change, in the order it would bite.", fs=7.8)
+      caption="Table 10. What would need to change, in the order it would bite.", fs=7.8)
 para("It is worth being explicit that **none of these is implemented**. The brief asked for a working platform "
      "and an explanation of how the weakest part would scale; inventing a distributed reservation system for "
      "fourteen hotels would have been a worse use of the time than making the core flows correct and tested. "

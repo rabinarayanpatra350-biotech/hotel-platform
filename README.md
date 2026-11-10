@@ -4,7 +4,20 @@ A complete hotel booking and enquiry platform for a fictional group of **14 bout
 built for the Junior Full Stack Developer internship project track.
 
 **Stack:** React 18 + Vite · Node 20 + Express · PostgreSQL 16 · JWT with rotating refresh tokens ·
-GitHub Actions CI · deployable to Vercel (web) and Render (API + database).
+GitHub Actions CI · deployed to GitHub Pages, with configuration for Netlify, Render and Vercel.
+
+## Live site
+
+### **https://rabinarayanpatra350-biotech.github.io/hotel-platform/**
+
+A working build, reading the same live PostgreSQL database as the full application — browse all 14 properties,
+open one to see room types, real inventory and guest reviews, submit a booking or an enquiry, and open the
+staff dashboard for occupancy, ADR and RevPAR.
+
+GitHub Pages is static, so this build talks to the database through Supabase's REST API instead of the Express
+server. That means **no sign-in and no staff/admin roles** here; the complete server-side application, with JWT
+sessions, rotating refresh tokens and role-based access, is in [`/server`](server/) and covered by 125 passing
+tests. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full picture.
 
 ---
 
